@@ -1,0 +1,121 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户管理 ====================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("user") // "admin" 或 "user"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== 存储位置管理 ====================
+
+// 冰箱
+model Freezer {
+  id          String   @id @default(cuid())
+  name        String   // 冰箱名称，如 "1号冰箱"
+  location    String?  // 存放位置，如 "实验室A"
+  temperature String?  // 温度，如 "-80°C"
+  capacity    Int?     // 容量（架子数量）
+  remark      String?  // 备注
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  racks       Rack[]   // 包含的架子
+}
+
+// 架子
+model Rack {
+  id        String   @id @default(cuid())
+  name      String   // 架子名称，如 "A架"
+  freezerId String   // 所属冰箱
+  capacity  Int?     // 容量（盒子数量）
+  remark    String?  // 备注
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  freezer   Freezer  @relation(fields: [freezerId], references: [id], onDelete: Cascade)
+  boxes     Box[]    // 包含的盒子
+}
+
+// 盒子
+model Box {
+  id        String   @id @default(cuid())
+  name      String   // 盒子名称，如 "盒子1"
+  rackId    String   // 所属架子
+  rows      Int      @default(10) // 行数
+  cols      Int      @default(10) // 列数
+  remark    String?  // 备注
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  rack      Rack     @relation(fields: [rackId], references: [id], onDelete: Cascade)
+  cells     Cell[]   // 包含的细胞
+}
+
+// ==================== 细胞管理 ====================
+
+// 细胞批次（一次入库的细胞）
+model CellBatch {
+  id           String   @id @default(cuid())
+  batchCode    String?  // 批次编号（可选）
+  name         String   // 细胞名称
+  cellType     String   // 细胞类型（必填）
+  passage      String   // 代次（可以是数字或"未知"）
+  totalQuantity Int     // 总数量（管）
+  freezeDate   DateTime // 冻存日期
+  freezeMedium String?  // 冻存液
+  donorInfo    String?  // 供体信息
+  cultureInfo  String?  // 培养条件
+  remark       String?  // 备注
+  operator     String?  // 操作人
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  cells        Cell[]   // 包含的细胞样本
+}
+
+// 细胞样本（单个存储位置的细胞）
+model Cell {
+  id           String   @id @default(cuid())
+  code         String?  // 细胞编号（可选）
+  positionRow  Int      // 位置行号（1-26，对应A-Z）
+  positionCol  Int      // 位置列号（1-...）
+  status       String   @default("stored") // "stored"(在库) 或 "removed"(已取出)
+  remark       String?  // 备注
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  batchId      String   // 所属批次
+  batch        CellBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  boxId        String   // 所属盒子
+  box          Box      @relation(fields: [boxId], references: [id], onDelete: Cascade)
+  logs         OperationLog[] // 操作记录
+}
+
+// ==================== 操作日志 ====================
+
+model OperationLog {
+  id          String   @id @default(cuid())
+  cellId      String?  // 细胞ID（可选，批量操作时可为空）
+  batchId     String?  // 批次ID
+  operation   String   // 操作类型："inbound"(入库) 或 "outbound"(取出)
+  quantity    Int      // 操作数量
+  reason      String?  // 取出原因
+  operator    String?  // 操作人
+  remark      String?  // 备注
+  createdAt   DateTime @default(now())
+  
+  cell        Cell?    @relation(fields: [cellId], references: [id], onDelete: Cascade)
+}
